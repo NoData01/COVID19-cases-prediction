@@ -9,24 +9,25 @@
 ![covid19](static/covid19.png)
 
 # COVID19-cases-prediction
-Predicting the new cases (cases_new) in Malaysia using the past 30 days of number of cases.
- 
- 
-## Description 
-Text documents are essential as they are one of the richest sources of data for businesses. Text documents often contain crucial information which might shape the market trends or influence the investment flows. Therefore, companies often hire analysts to monitor the trend via articles posted online, tweets on social media platforms such as Twitter or articles from newspaper. However, some companies may wish to only focus on articles related to technologies and politics. Thus, filtering of the articles into different categories is required. 
 
-Here, our aim is to categorize unseen articles into 5 categories namely Sport, Tech, Business, Entertainment and Politics.
+## Description
+The year 2020 was a catastrophic year for humanity. Pneumonia of unknown aetiology was first reported in December 2019., since then, COVID-19 spread to the whole world and became a global pandemic. More than 200 countries were affected due to pandemic and many countries were trying to save precious lives of their people by imposing travel restrictions, quarantines, social distances, event postponements and lockdowns to prevent the spread of the virus. However, due to lackadaisical attitude, efforts attempted by the governments were jeopardised, thus, predisposing to the wide spread of virus and lost of lives.
+The scientists believed that the absence of AI assisted automated tracking and predicting system is the cause of the wide spread of COVID-19 pandemic. Hence, the scientist proposed the usage of deep learning model to predict the daily COVID cases to determine if travel bans should be imposed or rescinded.
+
+Hence, in this project, our aim is to create a deep learning model using LSTM neural network which will be used to predict new cases (cases_new) in Malaysia using the past 30 days of number of cases.
+
 
 # Our Aproach
 
 # Step 1) Loading the data:
-Data preparation is the primary step for any deep learning problem. The dataset can be obtained from this link [dataset](https://raw.githubusercontent.com/susanli2016/PyCon-Canada-2019-NLP-Tutorial/master/bbc-text.csv) . This dataset consists of a texts that will be use for training. 
+Data preparation is the primary step for any deep learning problem. The dataset can be obtained from this link [github](https://github.com/MoH-Malaysia/covid19-public). This project will be use two types datasets that contain covid cases which one will be use for train the model and the other is for testing the model.
 
-           CSV_URL = 'https://raw.githubusercontent.com/susanli2016/PyCon-Canada-\
-           2019-NLP-Tutorial/master/bbc-text.csv'
+           COVID_PATH = os.path.join(os.getcwd(),'cases_malaysia_train.csv')
+           COVID_TEST_PATH = os.path.join(os.getcwd(),'cases_malaysia_test.csv')
 
 
-           df = pd.read_csv(CSV_URL)
+           df = pd.read_csv(COVID_PATH,na_values = [' ','?'])
+           test_df = pd.read_csv(COVID_TEST_PATH,na_values = ' ')
 
 
 # Step 2) Data Inspection/Visualization:
@@ -35,89 +36,70 @@ Data preparation is the primary step for any deep learning problem. The dataset 
            df.tail(10)
            df.info()
            df.describe()
+           
+Here, we would like to focus more on new cases of COVID-19 and to see the trend of the transmission.
 
-           df.duplicated().sum()   # There is 99 duplicated text
+           plt.figure()
+           plt.plot(df['cases_new'])
+           plt.legend(['cases_new'])
+           plt.show()
+
+
+           df.duplicated().sum()  
            df[df.duplicated()]
 
 # Step 3) Data Cleaning:
+
+From the previous step, we noticed that our datasets have contains number of duplicates. Thus, remove the duplicated data are necessary.
 
            # Remove the duplicated data
            df = df.drop_duplicates()
            df.duplicated().sum()   # Ensure all duplicated have been removed
 
-           text = df['text'].values         # features of X
-           category = df['category'].values # target, y
+Then, `.interpolate()` will be use to impute the NaN values.
+
+           df = df['cases_new'].interpolate() 
+           df.isna().sum()
+           df = pd.DataFrame(df)
+
            
 # Step 4) Preprocessing:
 
-### 1) Convert into lower case. 
+           mms = MinMaxScaler()
+           df = mms.fit_transform(np.expand_dims(df['cases_new'],axis=-1))
+           test_df = mms.transform(np.expand_dims(test_df['cases_new'].values,axis=-1))
 
-No upper case been detected in text. So, we may skip this process.
+           X_train = []
+           y_train = []
 
-### 2) Tokenizing
+           win_size = 30 # since, we are predicting the next 30 days
 
-Here, we would like to change the text into numbers and the process to learn all the words is been done here.
+           for i in range(win_size,np.shape(df)[0]): #or df.shape[0]
+             X_train.append(df[i-win_size:i,0]) 
+             y_train.append(df[i,0]) # i because to predict the next day, '30'
 
-           vocab_size = 10000
-           oov_token = 'OOV'
-           
-           tokenizer = Tokenizer(num_words=vocab_size,oov_token=oov_token)
-
-           tokenizer.fit_on_texts(text)      
-           word_index = tokenizer.word_index
-           print(word_index)
-
-           train_sequences = tokenizer.texts_to_sequences(text) # To convert into numbers
-
-### 3) Padding & truncating
-
-            length_of_text = [len(i) for i in train_sequences] # list comprehension
-            print(np.median(length_of_text))  # to get the number of max length for padding
-
-            max_len = 340
-
-            padded_text = pad_sequences(train_sequences,maxlen=max_len,
-                                        padding='post',
-                                        truncating='post')
-
-### 4) One Hot Encoding for the target
-
-            ohe = OneHotEncoder(sparse=False)
-            category = ohe.fit_transform(np.expand_dims(category,axis=-1))
-
-### 5) Train test split
-
-            X_train,X_test,y_train,y_test = train_test_split(padded_text,category,
-                                                             test_size=0.3,
-                                                             random_state=123)
-
-            X_train = np.expand_dims(X_train,axis=-1)
-            X_test = np.expand_dims(X_test,axis=-1)
+           X_train = np.array(X_train)
+           y_train = np.array(y_train)
 
 # Model Development
-By using the model Sequential, LSTM, dropout, SpatialDropout1D, Bidirectional and Dense, Our model development is been structured. Note that, Spatial 1D is a version of Dropout. This version performs the same function as Dropout, however, it drops entire 1D feature maps instead of individual elements. The model can be view in `module_sentiment.py` file.
+By using the model Sequential, LSTM, dropout, and Dense, Our model development is been structured. The model function can be view in `module_covid_cases.py` file.
 
-           embedding_dim = 64
-           num_feature = np.shape(X_train)[1]
-           num_class = 5 
 
            mc = ModelCreation()
-           model = mc.simple_lstm_layer(num_feature, num_class, vocab_size,
-                                        embedding_dim, drop_rate=0.3, num_node=128)
+           model = mc.model_development(X_train, num_node=64, drop_rate=0.2, 
+                                        output_node=1)
 
-           model.compile(optimizer='adam', loss='categorical_crossentropy',
-                         metrics='acc')
+           model.compile(optimizer='adam',loss='mse',metrics='mape')
 
-           # Visualizing the model
+           # Visualizing the model development
            plot_model(model, to_file='model_plot.png', show_shapes=True, 
                       show_layer_names=True)
 
            # Callbacks
            tensorboard_callback = TensorBoard(log_dir=LOG_FOLDER_PATH)
 
-           # Model training
-           hist = model.fit(X_train,y_train, validation_data=(X_test,y_test),
-                            epochs=50, batch_size=128, callbacks=[tensorboard_callback])
+           hist = model.fit(X_train,y_train,
+                     epochs=100, batch_size=32, callbacks=[tensorboard_callback])
 
 The visualization of our model architecture can be presented in the figure below:
 
@@ -125,37 +107,49 @@ The visualization of our model architecture can be presented in the figure below
 
 
 
-# Model Evaluation:
-Through this section, classification report and confusion matrix is been used as a part of our model evaluation and analysis. Around 75% accuracy have been achieved.
+# Model Deployment and Analysis:
 
-           results = model.evaluate(X_test,y_test)
-           print(results)
-           y_true = np.argmax(y_test,axis=1)
-           y_pred = np.argmax(model.predict(X_test),axis=1)
+           con_test = np.concatenate((df,test_df),axis=0)
+           con_test = con_test[-130:]
 
-           cm = confusion_matrix(y_true,y_pred)
-           cr = classification_report(y_true,y_pred)
-           print(cm)
-           print(cr)
+           X_test = []
+           for i in range(win_size,len(con_test)):  #30,100
+             X_test.append(con_test[i-win_size:i,0])
 
-           disp = ConfusionMatrixDisplay(confusion_matrix=cm)
-           disp.plot(cmap=plt.cm.Blues)
+           X_test = np.array(X_test)
+
+           predicted = model.predict(np.expand_dims(X_test,axis=-1))
+
+           plt.figure()
+           plt.plot(test_df,'b',label='actual covid cases')
+           plt.plot(predicted,'r',label='predicted covid cases')
+           plt.legend()
            plt.show()
 
+           plt.figure()
+           plt.plot(mms.inverse_transform(test_df),'b',
+                    label='actual covid cases')
+           plt.plot(mms.inverse_transform(predicted),'r',
+                    label='predicted covid cases')
+           plt.legend()
+           plt.show()
+
+Thus, the result is been plotted as below:
+
 ![plot_result](static/plot_result.png)
+
+This model can predict the trend of the covid-19 cases. Despite 7% error for mean absolute error and error is only around 15% for MAPE when tested against testing dataset.
 
 ![performance_result](static/performance_result.png)
 
 
-## Results and Discussion :pencil:
-
-# Plotting the graph 
-Although the model is overfitted, there is still a ways to improve the model which is by adding more data to the model.
-On the other hand, adding more hidden layer, dropout or increasing the number of nodes might help in preventing the model from overfitted.
+The training process plotted using Tensorboard also is been presented as below:
 
 ![tensorboard](static/tensorboard.png)
 
+## Results and Discussion :pencil:
 
+Although the model works fine, it can still be improve by increasing the number of nodes and layers to prevent the overfitted model. On the other hand, increasing the input data and epochs will help for the model to learn more about the data and can perform a good prediction.
 
 ## Credits :open_file_folder:
 
